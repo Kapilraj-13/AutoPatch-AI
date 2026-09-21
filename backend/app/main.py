@@ -1,9 +1,10 @@
 import os
 import shutil
 import time
+import zipfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -97,6 +98,37 @@ def reset_project():
         shutil.copy(orig, target)
         return {"success": True, "message": "test_project/vulnerable.py has been reset to original vulnerable state."}
     return {"success": False, "message": "Original backup not found."}
+
+
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+
+@app.post("/api/projects/upload")
+async def upload_project_zip(file: UploadFile = File(...)):
+    """Accepts a ZIP file (e.g. 40MB+), extracts it into uploads/extracted/, and prepares it for scanning."""
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files are supported.")
+    
+    zip_dest = UPLOADS_DIR / file.filename
+    with open(zip_dest, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    extract_folder = UPLOADS_DIR / "extracted" / Path(file.filename).stem
+    extract_folder.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        with zipfile.ZipFile(zip_dest, "r") as zip_ref:
+            zip_ref.extractall(extract_folder)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to unzip archive: {str(e)}")
+        
+    return {
+        "success": True,
+        "message": f"Successfully extracted '{file.filename}'",
+        "extracted_path": str(extract_folder),
+        "target_path": str(extract_folder),
+        "filename": file.filename
+    }
 
 
 # ==========================================

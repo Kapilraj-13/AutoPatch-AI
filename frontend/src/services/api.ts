@@ -19,6 +19,20 @@ export async function resetProject(): Promise<{ success: boolean; message: strin
   return res.json();
 }
 
+export async function uploadZipFile(file: File): Promise<{ success: boolean; message: string; target_path: string; filename: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/projects/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Upload failed');
+  }
+  return res.json();
+}
+
 export interface ScanResponse {
   run_id: string;
   mode: string;

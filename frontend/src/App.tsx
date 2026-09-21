@@ -12,6 +12,7 @@ import {
   runDetectError,
   runDebugAndPush,
   runVerifyAndPush,
+  uploadZipFile,
 } from './services/api';
 import { SystemStatus, Finding, TimelineStep, PatchInfo, GitInfo } from './types';
 
@@ -22,6 +23,10 @@ export const App: React.FC = () => {
   const [timeline, setTimeline] = useState<TimelineStep[]>([]);
   const [patches, setPatches] = useState<PatchInfo[]>([]);
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
+
+  const [activeTarget, setActiveTarget] = useState<string>('');
+  const [activeTargetLabel, setActiveTargetLabel] = useState<string>('test_project/vulnerable.py');
+  const [isUploading, setIsUploading] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -44,6 +49,31 @@ export const App: React.FC = () => {
     refreshSystem();
   }, []);
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const res = await uploadZipFile(file);
+      setActiveTarget(res.target_path);
+      setActiveTargetLabel(`uploads/extracted/${res.filename}`);
+      setAlert({
+        type: 'success',
+        message: `Project archive '${res.filename}' uploaded and unpacked! Active target switched.`
+      });
+      // Reset previous results for clean slate
+      setFindings([]);
+      setTimeline([]);
+      setPatches([]);
+      setGitInfo(null);
+    } catch (err: any) {
+      setAlert({ type: 'error', message: err.message || 'Failed to upload ZIP file' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // Action 1: DETECT ERROR
   const handleDetect = async () => {
     setIsLoading(true);
@@ -52,11 +82,11 @@ export const App: React.FC = () => {
     setPatches([]);
     setGitInfo(null);
     setTimeline([
-      { step: 'AST Scanner', status: 'RUNNING', details: 'Scanning Python files...', time: new Date().toLocaleTimeString() }
+      { step: 'AST Scanner', status: 'RUNNING', details: `Scanning target: ${activeTargetLabel}...`, time: new Date().toLocaleTimeString() }
     ]);
 
     try {
-      const res = await runDetectError();
+      const res = await runDetectError(activeTarget || undefined);
       setFindings(res.findings);
       setTimeline([
         { step: 'AST Scanner', status: 'PASSED', details: `Parsed ${res.stats.files_scanned} files. Applied ${res.stats.total_rules_applied} rules.`, time: new Date().toLocaleTimeString() },
@@ -85,7 +115,7 @@ export const App: React.FC = () => {
     setGitInfo(null);
 
     try {
-      const res = await runDebugAndPush();
+      const res = await runDebugAndPush(activeTarget || undefined);
       setTimeline(res.timeline || []);
       if (res.success) {
         setPatches(res.patches || []);
@@ -117,7 +147,7 @@ export const App: React.FC = () => {
     setGitInfo(null);
 
     try {
-      const res = await runVerifyAndPush();
+      const res = await runVerifyAndPush(activeTarget || undefined);
       if (res.clean) {
         setTimeline([
           { step: 'AST Security Scan', status: 'PASSED', details: 'Zero vulnerabilities detected in codebase.', time: new Date().toLocaleTimeString() },
@@ -203,16 +233,41 @@ export const App: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Target:</span>
                 <span className="text-xs font-mono font-bold text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
-                  test_project/vulnerable.py
+                  {activeTargetLabel}
                 </span>
+                {activeTarget && (
+                  <button
+                    onClick={() => {
+                      setActiveTarget('');
+                      setActiveTargetLabel('test_project/vulnerable.py');
+                      setAlert({ type: 'info', message: 'Switched back to default test_project' });
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-white underline ml-1"
+                  >
+                    Reset to Default
+                  </button>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Contains SQL Injection (R001), Command Injection (R002), and Dynamic Execution (R003)
+                {activeTarget ? 'Custom uploaded project archive unpacked and ready for security scan.' : 'Default sample project with SQLi, Command Injection, and Dynamic Execution.'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Upload ZIP button */}
+            <label className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition flex items-center gap-1.5 cursor-pointer">
+              <span>📦</span>
+              <span>{isUploading ? 'Unpacking ZIP...' : 'Upload Project (.zip)'}</span>
+              <input
+                type="file"
+                accept=".zip"
+                onChange={handleFileUpload}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
+
             {projectFiles.map((pf) => (
               <button
                 key={pf.name}
