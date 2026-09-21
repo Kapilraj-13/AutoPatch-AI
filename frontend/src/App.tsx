@@ -197,7 +197,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-sky-500 selection:text-white">
       {/* Header */}
       <Header status={status} onReset={handleReset} isResetting={isResetting} />
 
@@ -205,16 +205,16 @@ export const App: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 space-y-8">
         {/* Banner Alert */}
         {alert && (
-          <div className={`p-4 rounded-2xl border text-sm flex items-center justify-between transition-all ${
-            alert.type === 'success' ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-200' :
-            alert.type === 'error' ? 'bg-rose-950/40 border-rose-800/60 text-rose-200' :
-            'bg-sky-950/40 border-sky-800/60 text-sky-200'
+          <div className={`p-4 rounded-2xl border text-sm flex items-center justify-between transition-all shadow-xs ${
+            alert.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
+            alert.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-900' :
+            'bg-sky-50 border-sky-200 text-sky-900'
           }`}>
             <div className="flex items-center gap-2">
               <span className="text-lg">
                 {alert.type === 'success' ? '✅' : alert.type === 'error' ? '⚠️' : 'ℹ️'}
               </span>
-              <span>{alert.message}</span>
+              <span className="font-medium">{alert.message}</span>
             </div>
             <button
               onClick={() => setAlert(null)}
@@ -226,13 +226,15 @@ export const App: React.FC = () => {
         )}
 
         {/* Project Target Bar */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">📁</span>
+            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 border border-sky-200 flex items-center justify-center text-xl">
+              📁
+            </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Target:</span>
-                <span className="text-xs font-mono font-bold text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Target:</span>
+                <span className="text-xs font-mono font-bold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded-md border border-sky-200">
                   {activeTargetLabel}
                 </span>
                 {activeTarget && (
@@ -242,21 +244,21 @@ export const App: React.FC = () => {
                       setActiveTargetLabel('test_project/vulnerable.py');
                       setAlert({ type: 'info', message: 'Switched back to default test_project' });
                     }}
-                    className="text-[10px] text-slate-400 hover:text-white underline ml-1"
+                    className="text-[11px] text-sky-600 hover:text-sky-800 underline font-medium ml-1"
                   >
                     Reset to Default
                   </button>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {activeTarget ? 'Custom uploaded project archive unpacked and ready for security scan.' : 'Default sample project with SQLi, Command Injection, and Dynamic Execution.'}
+              <p className="text-xs text-slate-500 mt-0.5">
+                {activeTarget ? 'Custom project archive unpacked and ready for security scan.' : 'Default sample target with SQLi (R001), Command Injection (R002), and Dynamic Execution (R003).'}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Upload ZIP button */}
-            <label className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-semibold border border-indigo-500/30 transition flex items-center gap-1.5 cursor-pointer">
+            <label className="px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold border border-sky-200 transition flex items-center gap-1.5 cursor-pointer shadow-xs">
               <span>📦</span>
               <span>{isUploading ? 'Unpacking ZIP...' : 'Upload Project (.zip)'}</span>
               <input
@@ -272,11 +274,11 @@ export const App: React.FC = () => {
               <button
                 key={pf.name}
                 onClick={() => setSelectedFileContent(selectedFileContent === pf.name ? null : pf.name)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-medium border border-slate-700 transition flex items-center gap-1.5"
+                className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-mono font-semibold border border-slate-200 transition flex items-center gap-1.5 shadow-xs"
               >
                 <span>📄</span>
                 <span>{pf.name}</span>
-                <span className="text-[10px] text-slate-500">{selectedFileContent === pf.name ? '▲' : '▼'}</span>
+                <span className="text-[10px] text-slate-400">{selectedFileContent === pf.name ? '▲' : '▼'}</span>
               </button>
             ))}
           </div>
@@ -284,12 +286,12 @@ export const App: React.FC = () => {
 
         {/* File Content Preview */}
         {selectedFileContent && (
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs font-mono">
-            <div className="flex items-center justify-between mb-2 text-slate-400">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 text-xs font-mono shadow-sm">
+            <div className="flex items-center justify-between mb-3 text-slate-600 font-semibold">
               <span>Previewing: {selectedFileContent}</span>
-              <button onClick={() => setSelectedFileContent(null)} className="text-slate-500 hover:text-white">✕ Close</button>
+              <button onClick={() => setSelectedFileContent(null)} className="text-slate-400 hover:text-slate-800">✕ Close</button>
             </div>
-            <pre className="p-4 rounded-xl bg-slate-900 overflow-x-auto text-slate-200 max-h-64">
+            <pre className="p-4 rounded-xl bg-slate-900 overflow-x-auto text-slate-200 max-h-64 border border-slate-800">
               <code>
                 {projectFiles.find((f) => f.name === selectedFileContent)?.content || ''}
               </code>
@@ -338,7 +340,7 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-400 bg-white">
         AutoPatch AI Framework • AST Static Scanner + Context Builder + LLM Verification & Closed-Loop Repair
       </footer>
     </div>
