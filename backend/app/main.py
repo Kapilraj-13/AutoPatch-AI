@@ -22,6 +22,11 @@ from .validation.syntax import check_syntax
 from .validation.tests import run_tests
 from .validation.rescan import verify_clean_rescan
 from .git.manager import GitManager
+from .git.github_service import (
+    verify_github_token,
+    list_user_repositories,
+    import_github_repository
+)
 
 app = FastAPI(
     title="AutoPatch AI Backend API",
@@ -29,7 +34,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for Vite frontend (typically localhost:5173 or 3000)
+# Enable CORS for Vite frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -51,10 +56,25 @@ class ScanRequest(BaseModel):
 class DebugRequest(BaseModel):
     target_path: Optional[str] = None
     auto_push: Optional[bool] = True
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
+    create_pr: Optional[bool] = True
 
 class VerifyPushRequest(BaseModel):
     target_path: Optional[str] = None
     commit_message: Optional[str] = "chore: verified clean codebase passed security scan"
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
+
+class GitHubVerifyRequest(BaseModel):
+    token: str
+
+class GitHubReposRequest(BaseModel):
+    token: str
+
+class GitHubImportRequest(BaseModel):
+    token: Optional[str] = None
+    repo_identifier: str
 
 
 @app.get("/api/status")
@@ -102,6 +122,7 @@ def reset_project():
 
 UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
+(UPLOADS_DIR / "extracted").mkdir(exist_ok=True)
 
 @app.post("/api/projects/upload")
 async def upload_project_zip(file: UploadFile = File(...)):
@@ -129,6 +150,35 @@ async def upload_project_zip(file: UploadFile = File(...)):
         "target_path": str(extract_folder),
         "filename": file.filename
     }
+
+
+# ==========================================
+# 🐙 GITHUB ACCOUNT INTEGRATION ENDPOINTS
+# ==========================================
+@app.post("/api/github/verify")
+def api_verify_github(payload: GitHubVerifyRequest):
+    """Verifies a GitHub Personal Access Token and returns profile details."""
+    res = verify_github_token(payload.token)
+    if not res.get("valid"):
+        raise HTTPException(status_code=400, detail=res.get("error", "GitHub verification failed"))
+    return res
+
+
+@app.post("/api/github/repos")
+def api_get_github_repos(payload: GitHubReposRequest):
+    """Lists repositories accessible to the user via their GitHub token."""
+    repos = list_user_repositories(payload.token)
+    return {"repos": repos}
+
+
+@app.post("/api/github/import")
+def api_import_github_repo(payload: GitHubImportRequest):
+    """Clones or imports a user's GitHub repository into the AutoPatch workspace."""
+    extracted_dir = UPLOADS_DIR / "extracted"
+    res = import_github_repository(payload.repo_identifier, payload.token, extracted_dir)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to import GitHub repository"))
+    return res
 
 
 # ==========================================
@@ -193,7 +243,7 @@ def detect_errors(payload: Optional[ScanRequest] = None):
 def debug_and_push(payload: Optional[DebugRequest] = None):
     """
     Option 2: 🛠️ DEBUG & PUSH
-    Closed Loop: Scan -> Context -> LLM Verify -> Repair -> Validate (Syntax + Pytest + Re-scan) -> Git Branch & Push.
+    Closed Loop: Scan -> Context -> LLM Verify -> Repair -> Validate (Syntax + Pytest + Re-scan) -> Git Branch & Remote Push / PR.
     """
     if payload is None:
         payload = DebugRequest()
@@ -321,8 +371,34 @@ def debug_and_push(payload: Optional[DebugRequest] = None):
     git_result = {}
     if payload.auto_push:
         log_step("Git Integration", "RUNNING", "Creating repair branch and committing secure patches...")
-        git_result = git_manager.commit_and_branch(
-            commit_message="fix(security): automated code repair via AutoPatch AI"
+        
+        # Determine target repository directory
+        target_path = Path(target)
+        repo_dir = str(target_path.parent if target_path.is_file() else target_path)
+        active_git = GitManager(repo_dir=repo_dir)
+
+        # Build PR summary
+        pr_bullets = []
+        for p in generated_patches:
+            pr_bullets.append(f"- **{p.get('relative_file', 'file')}**: Replaced vulnerable pattern with secure alternative.")
+        pr_summary = "\n".join(pr_bullets)
+        pr_body = (
+            f"## 🛡️ AutoPatch AI Security Repair\n\n"
+            f"AutoPatch AI detected, verified, and successfully repaired **{len(generated_patches)} security vulnerabilities** in this repository.\n\n"
+            f"### Patches Applied:\n{pr_summary}\n\n"
+            f"### Validation Summary:\n"
+            f"- AST Security Re-scan: **0 findings (CLEAN)**\n"
+            f"- Python Syntax Parser: **PASS**\n"
+            f"- Test Suite (pytest): **PASS**\n\n"
+            f"*Generated automatically by [AutoPatch AI](https://github.com/Kapilraj-13/AutoPatch-AI).*"
+        )
+
+        git_result = active_git.commit_and_branch(
+            commit_message="fix(security): automated code repair via AutoPatch AI",
+            github_token=payload.github_token,
+            github_repo=payload.github_repo,
+            create_pr=payload.create_pr if payload.create_pr is not None else True,
+            pr_body=pr_body
         )
         log_step("Git Integration", "PASSED", f"Committed to {git_result.get('branch')} [{git_result.get('commit_hash')}]. {git_result.get('push_message')}")
 
@@ -359,7 +435,6 @@ def verify_and_push(payload: Optional[VerifyPushRequest] = None):
         payload = VerifyPushRequest()
     target = payload.target_path or str(TEST_PROJECT_DIR)
     run_id = f"RUN-VERIFY-{int(time.time())}"
-    timeline = []
 
     # 1. AST SCAN
     scan_res = scan_directory(target)
@@ -388,9 +463,16 @@ def verify_and_push(payload: Optional[VerifyPushRequest] = None):
         }
 
     # 3. GIT PUSH
-    git_result = git_manager.commit_and_branch(
+    target_path = Path(target)
+    repo_dir = str(target_path.parent if target_path.is_file() else target_path)
+    active_git = GitManager(repo_dir=repo_dir)
+
+    git_result = active_git.commit_and_branch(
         branch_name="verified-main",
-        commit_message=payload.commit_message or "chore: verified clean codebase"
+        commit_message=payload.commit_message or "chore: verified clean codebase",
+        github_token=payload.github_token,
+        github_repo=payload.github_repo,
+        create_pr=False
     )
 
     result = {

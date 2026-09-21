@@ -1,4 +1,4 @@
-import { SystemStatus, Finding, TimelineStep, PatchInfo, GitInfo } from '../types';
+import { SystemStatus, Finding, TimelineStep, PatchInfo, GitInfo, GitHubUser, GitHubRepoItem } from '../types';
 
 const API_BASE = '/api';
 
@@ -29,6 +29,48 @@ export async function uploadZipFile(file: File): Promise<{ success: boolean; mes
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.detail || 'Upload failed');
+  }
+  return res.json();
+}
+
+// ==========================================
+// 🐙 GITHUB API INTEGRATION
+// ==========================================
+export async function verifyGitHub(token: string): Promise<{ valid: boolean; user: GitHubUser }> {
+  const res = await fetch(`${API_BASE}/github/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'GitHub authentication failed');
+  }
+  return res.json();
+}
+
+export async function fetchGitHubRepos(token: string): Promise<{ repos: GitHubRepoItem[] }> {
+  const res = await fetch(`${API_BASE}/github/repos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Failed to fetch repositories');
+  }
+  return res.json();
+}
+
+export async function importGitHubRepo(repoIdentifier: string, token?: string): Promise<{ success: boolean; target_path: string; repo_full_name: string; message: string }> {
+  const res = await fetch(`${API_BASE}/github/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_identifier: repoIdentifier, token }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Failed to import repository');
   }
   return res.json();
 }
@@ -74,11 +116,23 @@ export interface DebugResponse {
   remaining_findings?: Finding[];
 }
 
-export async function runDebugAndPush(targetPath?: string, autoPush = true): Promise<DebugResponse> {
+export async function runDebugAndPush(
+  targetPath?: string,
+  autoPush = true,
+  ghToken?: string,
+  ghRepo?: string,
+  createPr = true
+): Promise<DebugResponse> {
   const res = await fetch(`${API_BASE}/debug`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_path: targetPath, auto_push: autoPush }),
+    body: JSON.stringify({
+      target_path: targetPath,
+      auto_push: autoPush,
+      github_token: ghToken || undefined,
+      github_repo: ghRepo || undefined,
+      create_pr: createPr,
+    }),
   });
   if (!res.ok) {
     const err = await res.json();
@@ -98,11 +152,19 @@ export interface VerifyPushResponse {
   message: string;
 }
 
-export async function runVerifyAndPush(targetPath?: string): Promise<VerifyPushResponse> {
+export async function runVerifyAndPush(
+  targetPath?: string,
+  ghToken?: string,
+  ghRepo?: string
+): Promise<VerifyPushResponse> {
   const res = await fetch(`${API_BASE}/verify-push`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_path: targetPath }),
+    body: JSON.stringify({
+      target_path: targetPath,
+      github_token: ghToken || undefined,
+      github_repo: ghRepo || undefined,
+    }),
   });
   if (!res.ok) {
     const err = await res.json();

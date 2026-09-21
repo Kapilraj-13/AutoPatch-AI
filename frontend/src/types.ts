@@ -51,6 +51,28 @@ export interface GitInfo {
   push_status?: string;
   push_message?: string;
   remote_origin?: string | null;
+  pr_url?: string | null;
+  pr_number?: number | null;
+  branch_url?: string | null;
+  remote_repo?: string | null;
+}
+
+export interface GitHubUser {
+  login: string;
+  name: string;
+  avatar_url: string;
+  html_url: string;
+  public_repos?: number;
+}
+
+export interface GitHubRepoItem {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  html_url: string;
+  description: string;
 }
 
 export interface SystemStatus {

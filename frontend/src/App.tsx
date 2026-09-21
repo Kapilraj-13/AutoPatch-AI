@@ -5,6 +5,7 @@ import { PipelineStepper } from './components/PipelineStepper';
 import { FindingsList } from './components/FindingsList';
 import { CodeDiffViewer } from './components/CodeDiffViewer';
 import { GitStatusCard } from './components/GitStatusCard';
+import { GitHubConnectModal } from './components/GitHubConnectModal';
 import {
   fetchStatus,
   fetchProjectFiles,
@@ -14,7 +15,7 @@ import {
   runVerifyAndPush,
   uploadZipFile,
 } from './services/api';
-import { SystemStatus, Finding, TimelineStep, PatchInfo, GitInfo } from './types';
+import { SystemStatus, Finding, TimelineStep, PatchInfo, GitInfo, GitHubUser } from './types';
 
 export const App: React.FC = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -23,6 +24,19 @@ export const App: React.FC = () => {
   const [timeline, setTimeline] = useState<TimelineStep[]>([]);
   const [patches, setPatches] = useState<PatchInfo[]>([]);
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null);
+
+  // GitHub Account & Repo State
+  const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('autopatch_gh_token') || '');
+  const [ghUser, setGhUser] = useState<GitHubUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('autopatch_gh_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('autopatch_gh_repo') || '');
+  const [isGhModalOpen, setIsGhModalOpen] = useState<boolean>(false);
 
   const [activeTarget, setActiveTarget] = useState<string>('');
   const [activeTargetLabel, setActiveTargetLabel] = useState<string>('test_project/vulnerable.py');
@@ -74,6 +88,19 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleRepoImported = (targetPath: string, repoName: string) => {
+    setActiveTarget(targetPath);
+    setActiveTargetLabel(`github/${repoName}`);
+    setAlert({
+      type: 'success',
+      message: `Repository '${repoName}' successfully imported from GitHub! Active target switched.`
+    });
+    setFindings([]);
+    setTimeline([]);
+    setPatches([]);
+    setGitInfo(null);
+  };
+
   // Action 1: DETECT ERROR
   const handleDetect = async () => {
     setIsLoading(true);
@@ -115,15 +142,23 @@ export const App: React.FC = () => {
     setGitInfo(null);
 
     try {
-      const res = await runDebugAndPush(activeTarget || undefined);
+      const res = await runDebugAndPush(activeTarget || undefined, true, ghToken, ghRepo);
       setTimeline(res.timeline || []);
       if (res.success) {
         setPatches(res.patches || []);
         setGitInfo(res.git || null);
-        setAlert({
-          type: 'success',
-          message: 'All vulnerabilities repaired, validated with syntax check + pytest + AST re-scan, and committed to Git!'
-        });
+        
+        if (res.git?.pr_url) {
+          setAlert({
+            type: 'success',
+            message: `🎉 All vulnerabilities repaired and Pull Request #${res.git.pr_number} created on GitHub!`
+          });
+        } else {
+          setAlert({
+            type: 'success',
+            message: 'All vulnerabilities repaired, validated with syntax check + pytest + AST re-scan, and committed to Git!'
+          });
+        }
       } else {
         setAlert({
           type: 'error',
@@ -147,7 +182,7 @@ export const App: React.FC = () => {
     setGitInfo(null);
 
     try {
-      const res = await runVerifyAndPush(activeTarget || undefined);
+      const res = await runVerifyAndPush(activeTarget || undefined, ghToken, ghRepo);
       if (res.clean) {
         setTimeline([
           { step: 'AST Security Scan', status: 'PASSED', details: 'Zero vulnerabilities detected in codebase.', time: new Date().toLocaleTimeString() },
@@ -199,7 +234,27 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-sky-500 selection:text-white">
       {/* Header */}
-      <Header status={status} onReset={handleReset} isResetting={isResetting} />
+      <Header
+        status={status}
+        onReset={handleReset}
+        isResetting={isResetting}
+        user={ghUser}
+        targetRepo={ghRepo}
+        onOpenGitHubModal={() => setIsGhModalOpen(true)}
+      />
+
+      {/* GitHub Account Connect Modal */}
+      <GitHubConnectModal
+        isOpen={isGhModalOpen}
+        onClose={() => setIsGhModalOpen(false)}
+        user={ghUser}
+        setUser={setGhUser}
+        token={ghToken}
+        setToken={setGhToken}
+        targetRepo={ghRepo}
+        setTargetRepo={setGhRepo}
+        onRepoImported={handleRepoImported}
+      />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 space-y-8">
@@ -251,12 +306,23 @@ export const App: React.FC = () => {
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                {activeTarget ? 'Custom project archive unpacked and ready for security scan.' : 'Default sample target with SQLi (R001), Command Injection (R002), and Dynamic Execution (R003).'}
+                {activeTarget
+                  ? 'Custom project workspace unpacked and ready for automated security scan & repair.'
+                  : 'Default sample project with SQLi (R001), Command Injection (R002), and Dynamic Execution (R003).'}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Import / Connect GitHub button */}
+            <button
+              onClick={() => setIsGhModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs"
+            >
+              <span>🐙</span>
+              <span>{ghUser ? (ghRepo ? `Repo: ${ghRepo.split('/')[1] || ghRepo}` : 'Select Repo') : 'Connect GitHub'}</span>
+            </button>
+
             {/* Upload ZIP button */}
             <label className="px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold border border-sky-200 transition flex items-center gap-1.5 cursor-pointer shadow-xs">
               <span>📦</span>
@@ -327,7 +393,7 @@ export const App: React.FC = () => {
         {/* Git & GitHub Result Panel */}
         {gitInfo && (
           <section>
-            <GitStatusCard git={gitInfo} />
+            <GitStatusCard git={gitInfo} onOpenGitHubModal={() => setIsGhModalOpen(true)} />
           </section>
         )}
 
