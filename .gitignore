@@ -20,3 +20,8 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
+
+# Archives & User Uploads
+*.zip
+uploads/
+
