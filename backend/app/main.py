@@ -25,7 +25,8 @@ from .git.manager import GitManager
 from .git.github_service import (
     verify_github_token,
     list_user_repositories,
-    import_github_repository
+    import_github_repository,
+    create_github_repository
 )
 
 app = FastAPI(
@@ -75,6 +76,12 @@ class GitHubReposRequest(BaseModel):
 class GitHubImportRequest(BaseModel):
     token: Optional[str] = None
     repo_identifier: str
+
+class GitHubCreateRepoRequest(BaseModel):
+    token: str
+    name: str
+    description: Optional[str] = "Repository created via AutoPatch AI"
+    private: Optional[bool] = False
 
 
 @app.get("/api/status")
@@ -178,6 +185,15 @@ def api_import_github_repo(payload: GitHubImportRequest):
     res = import_github_repository(payload.repo_identifier, payload.token, extracted_dir)
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error", "Failed to import GitHub repository"))
+    return res
+
+
+@app.post("/api/github/create-repo")
+def api_create_github_repo(payload: GitHubCreateRepoRequest):
+    """Creates a brand new repository on GitHub under the user's account."""
+    res = create_github_repository(payload.token, payload.name, payload.description, payload.private)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to create GitHub repository"))
     return res
 
 

@@ -79,6 +79,59 @@ def list_user_repositories(token: str) -> List[Dict[str, Any]]:
         return []
 
 
+def create_github_repository(
+    token: str,
+    name: str,
+    description: str = "",
+    private: bool = False
+) -> Dict[str, Any]:
+    """Creates a new repository on GitHub under the authenticated user's account."""
+    if not token or not token.strip():
+        return {"success": False, "error": "GitHub token is required."}
+    
+    clean_name = name.strip().replace(" ", "-")
+    if not clean_name:
+        return {"success": False, "error": "Repository name cannot be empty."}
+
+    payload = {
+        "name": clean_name,
+        "description": description or "Automated security patched project via AutoPatch AI",
+        "private": bool(private),
+        "auto_init": False
+    }
+
+    try:
+        resp = requests.post(
+            f"{GITHUB_API_BASE}/user/repos",
+            headers=get_github_headers(token),
+            json=payload,
+            timeout=15
+        )
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            return {
+                "success": True,
+                "repo": {
+                    "id": data.get("id"),
+                    "name": data.get("name"),
+                    "full_name": data.get("full_name"),
+                    "private": data.get("private"),
+                    "html_url": data.get("html_url"),
+                    "clone_url": data.get("clone_url"),
+                    "default_branch": data.get("default_branch", "main")
+                },
+                "message": f"Repository '{data.get('full_name')}' created successfully on GitHub!"
+            }
+        else:
+            err = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"message": resp.text}
+            return {
+                "success": False,
+                "error": err.get("message", f"GitHub API error ({resp.status_code})")
+            }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to create repository: {str(e)}"}
+
+
 def import_github_repository(repo_identifier: str, token: Optional[str], destination_root: Path) -> Dict[str, Any]:
     """
     Imports a repository into destination_root / repo_name.

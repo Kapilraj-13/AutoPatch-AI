@@ -75,6 +75,24 @@ export async function importGitHubRepo(repoIdentifier: string, token?: string): 
   return res.json();
 }
 
+export async function createGitHubRepo(
+  token: string,
+  name: string,
+  description?: string,
+  isPrivate?: boolean
+): Promise<{ success: boolean; repo: GitHubRepoItem; message: string }> {
+  const res = await fetch(`${API_BASE}/github/create-repo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, name, description, private: isPrivate || false }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Failed to create repository on GitHub');
+  }
+  return res.json();
+}
+
 export interface ScanResponse {
   run_id: string;
   mode: string;
