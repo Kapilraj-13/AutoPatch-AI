@@ -41,6 +41,7 @@ export const App: React.FC = () => {
   const [activeTarget, setActiveTarget] = useState<string>('');
   const [activeTargetLabel, setActiveTargetLabel] = useState<string>('test_project/vulnerable.py');
   const [isUploading, setIsUploading] = useState(false);
+  const [autoRunOnUpload, setAutoRunOnUpload] = useState<boolean>(true);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -63,6 +64,76 @@ export const App: React.FC = () => {
     refreshSystem();
   }, []);
 
+  // Automated 1-Click End-to-End Pipeline: Detect -> Repair -> Validate -> Push
+  const handleAutoPipeline = async (target?: string, label?: string) => {
+    const curTarget = target || activeTarget || undefined;
+    const curLabel = label || activeTargetLabel;
+
+    setIsLoading(true);
+    setActiveMode('AUTO');
+    setAlert(null);
+    setPatches([]);
+    setGitInfo(null);
+    setTimeline([
+      { step: 'AST Security Scan', status: 'RUNNING', details: `Scanning target: ${curLabel}...`, time: new Date().toLocaleTimeString() }
+    ]);
+
+    try {
+      // Step 1: Detect
+      const scanRes = await runDetectError(curTarget);
+      setFindings(scanRes.findings);
+
+      if (scanRes.findings.length > 0) {
+        setTimeline([
+          { step: 'AST Security Scan', status: 'PASSED', details: `Found ${scanRes.findings.length} vulnerabilities across ${scanRes.stats.files_scanned} files.`, time: new Date().toLocaleTimeString() },
+          { step: 'Closed-Loop Repair & Push', status: 'RUNNING', details: 'Synthesizing patches, running pytest, and pushing to Git...', time: new Date().toLocaleTimeString() }
+        ]);
+
+        // Step 2: Debug & Push
+        const debugRes = await runDebugAndPush(curTarget, true, ghToken, ghRepo);
+        setTimeline(debugRes.timeline || []);
+
+        if (debugRes.success) {
+          setPatches(debugRes.patches || []);
+          setGitInfo(debugRes.git || null);
+          if (debugRes.git?.pr_url) {
+            setAlert({
+              type: 'success',
+              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} vulnerabilities, validated via pytest, and created Pull Request #${debugRes.git.pr_number} on GitHub!`
+            });
+          } else {
+            setAlert({
+              type: 'success',
+              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} vulnerabilities, validated via pytest, and committed to Git!`
+            });
+          }
+        } else {
+          setAlert({
+            type: 'error',
+            message: debugRes.error || 'Automated repair or validation check failed.'
+          });
+        }
+      } else {
+        // Codebase clean, run verify & push
+        setTimeline([
+          { step: 'AST Security Scan', status: 'PASSED', details: 'Zero vulnerabilities detected in codebase.', time: new Date().toLocaleTimeString() },
+          { step: 'Git Integration', status: 'RUNNING', details: 'Pushing verified clean project to Git...', time: new Date().toLocaleTimeString() }
+        ]);
+        const verifyRes = await runVerifyAndPush(curTarget, ghToken, ghRepo);
+        setGitInfo(verifyRes.git || null);
+        setAlert({
+          type: 'success',
+          message: 'Codebase verified clean! 0 vulnerabilities detected. Pushed to Git.'
+        });
+      }
+      await refreshSystem();
+    } catch (err: any) {
+      setAlert({ type: 'error', message: err.message || 'Auto-Pipeline execution failed' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -71,16 +142,25 @@ export const App: React.FC = () => {
     try {
       const res = await uploadZipFile(file);
       setActiveTarget(res.target_path);
-      setActiveTargetLabel(`uploads/extracted/${res.filename}`);
-      setAlert({
-        type: 'success',
-        message: `Project archive '${res.filename}' uploaded and unpacked! Active target switched.`
-      });
-      // Reset previous results for clean slate
-      setFindings([]);
-      setTimeline([]);
-      setPatches([]);
-      setGitInfo(null);
+      const newLabel = `uploads/extracted/${res.filename}`;
+      setActiveTargetLabel(newLabel);
+
+      if (autoRunOnUpload) {
+        setAlert({
+          type: 'info',
+          message: `Archive '${res.filename}' unpacked! Automatically running error detection, repair & push...`
+        });
+        await handleAutoPipeline(res.target_path, newLabel);
+      } else {
+        setAlert({
+          type: 'success',
+          message: `Project archive '${res.filename}' uploaded and unpacked! Ready for scan.`
+        });
+        setFindings([]);
+        setTimeline([]);
+        setPatches([]);
+        setGitInfo(null);
+      }
     } catch (err: any) {
       setAlert({ type: 'error', message: err.message || 'Failed to upload ZIP file' });
     } finally {
@@ -314,6 +394,32 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* 1-Click Auto Pipeline Button */}
+            <button
+              onClick={() => handleAutoPipeline()}
+              disabled={isLoading}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-sky-500/20 disabled:opacity-60"
+            >
+              <span>⚡</span>
+              <span>{isLoading && activeMode === 'AUTO' ? 'Auto-Remediating...' : '1-Click Auto Detect & Push'}</span>
+            </button>
+
+            {/* Auto-Run Toggle on Upload */}
+            <label
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium cursor-pointer shadow-2xs hover:bg-slate-100"
+              title="Automatically run detection and push immediately when a ZIP is uploaded"
+            >
+              <input
+                type="checkbox"
+                checked={autoRunOnUpload}
+                onChange={(e) => setAutoRunOnUpload(e.target.checked)}
+                className="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+              />
+              <span className="flex items-center gap-1 text-[11px]">
+                <span className="text-amber-500 font-bold">⚡</span> Auto-Run on Upload
+              </span>
+            </label>
+
             {/* Import / Connect GitHub button */}
             <button
               onClick={() => setIsGhModalOpen(true)}
