@@ -103,8 +103,11 @@ class GitManager:
                 else:
                     self._run_git(["remote", "add", "origin", auth_remote_url])
 
-                # Push branch
+                # Push branch (try normal push, fallback to force push for unique repair branch)
                 push_res = self._run_git(["push", "-u", "origin", branch])
+                if not push_res["success"]:
+                    push_res = self._run_git(["push", "-u", "--force", "origin", branch])
+
                 if push_res["success"]:
                     push_status = "pushed"
                     branch_url = f"https://github.com/{remote_repo_name}/tree/{branch}"

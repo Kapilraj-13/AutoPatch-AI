@@ -61,6 +61,42 @@ export const GitStatusCard: React.FC<GitStatusCardProps> = ({ git, onOpenGitHubM
         </div>
       </div>
 
+      {/* Prominent Push Status Banner */}
+      {isRemotePushed ? (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🚀</span>
+            <div>
+              <h4 className="text-sm font-bold text-emerald-950">
+                The Push Has Been Completed Successfully!
+              </h4>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                Branch <strong className="font-mono">{git.branch}</strong> was created, committed, and pushed directly to GitHub.
+              </p>
+            </div>
+          </div>
+          {git.pr_url && (
+            <a
+              href={git.pr_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition whitespace-nowrap"
+            >
+              <span>🎉</span>
+              <span>Open Pull Request #{git.pr_number} ↗</span>
+            </a>
+          )}
+        </div>
+      ) : git.push_status === 'push_error' ? (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 flex items-start gap-3 text-xs">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <h4 className="font-bold text-amber-950">Push Notice: Local Commit Created</h4>
+            <p className="text-amber-800 mt-0.5">{git.push_message}</p>
+          </div>
+        </div>
+      ) : null}
+
       {/* 3 Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
@@ -86,7 +122,7 @@ export const GitStatusCard: React.FC<GitStatusCardProps> = ({ git, onOpenGitHubM
             Status
           </span>
           <span className={`font-bold text-sm mt-0.5 block ${isRemotePushed ? 'text-emerald-700' : 'text-sky-700'}`}>
-            {isRemotePushed ? '✓ Pushed to GitHub' : '✓ Staged & Committed'}
+            {isRemotePushed ? '✓ Pushed to GitHub' : '✓ Staged & Committed Locally'}
           </span>
         </div>
       </div>

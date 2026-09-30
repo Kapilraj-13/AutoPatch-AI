@@ -6,6 +6,7 @@ import { FindingsList } from './components/FindingsList';
 import { CodeDiffViewer } from './components/CodeDiffViewer';
 import { GitStatusCard } from './components/GitStatusCard';
 import { GitHubConnectModal } from './components/GitHubConnectModal';
+import { GitHubStatusCard } from './components/GitHubStatusCard';
 import {
   fetchStatus,
   fetchProjectFiles,
@@ -64,6 +65,16 @@ export const App: React.FC = () => {
     refreshSystem();
   }, []);
 
+  const handleDisconnectGitHub = () => {
+    setGhUser(null);
+    setGhToken('');
+    setGhRepo('');
+    localStorage.removeItem('autopatch_gh_token');
+    localStorage.removeItem('autopatch_gh_user');
+    localStorage.removeItem('autopatch_gh_repo');
+    setAlert({ type: 'info', message: 'GitHub account disconnected.' });
+  };
+
   // Automated 1-Click End-to-End Pipeline: Detect -> Repair -> Validate -> Push
   const handleAutoPipeline = async (target?: string, label?: string) => {
     const curTarget = target || activeTarget || undefined;
@@ -96,15 +107,22 @@ export const App: React.FC = () => {
         if (debugRes.success) {
           setPatches(debugRes.patches || []);
           setGitInfo(debugRes.git || null);
-          if (debugRes.git?.pr_url) {
+          const isPushed = debugRes.git?.push_status === 'pushed';
+
+          if (isPushed && debugRes.git?.pr_url) {
             setAlert({
               type: 'success',
-              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} bugs, validated via pytest, and created Pull Request #${debugRes.git.pr_number} on GitHub!`
+              message: `🚀 The push has been completed! Repaired ${debugRes.patches?.length} bugs, pushed branch '${debugRes.git.branch}', and created Pull Request #${debugRes.git.pr_number} on GitHub!`
+            });
+          } else if (isPushed) {
+            setAlert({
+              type: 'success',
+              message: `🚀 The push has been completed! Repaired ${debugRes.patches?.length} bugs and successfully pushed branch '${debugRes.git.branch}' to GitHub (${ghRepo})!`
             });
           } else {
             setAlert({
               type: 'success',
-              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} bugs, validated via pytest, and committed to Git!`
+              message: `✅ Repair Completed! Repaired ${debugRes.patches?.length} bugs and committed locally. (Connect GitHub to push remotely).`
             });
           }
         } else {
@@ -121,9 +139,12 @@ export const App: React.FC = () => {
         ]);
         const verifyRes = await runVerifyAndPush(curTarget, ghToken, ghRepo);
         setGitInfo(verifyRes.git || null);
+        const isPushed = verifyRes.git?.push_status === 'pushed';
         setAlert({
           type: 'success',
-          message: 'Codebase verified clean! 0 bugs detected. Pushed to Git.'
+          message: isPushed
+            ? `🚀 The push has been completed! Clean project pushed to GitHub (${verifyRes.git?.branch})!`
+            : 'Codebase verified clean! 0 bugs detected. Committed locally.'
         });
       }
       await refreshSystem();
@@ -227,16 +248,22 @@ export const App: React.FC = () => {
       if (res.success) {
         setPatches(res.patches || []);
         setGitInfo(res.git || null);
+        const isPushed = res.git?.push_status === 'pushed';
         
-        if (res.git?.pr_url) {
+        if (isPushed && res.git?.pr_url) {
           setAlert({
             type: 'success',
-            message: `🎉 All bugs repaired and Pull Request #${res.git.pr_number} created on GitHub!`
+            message: `🚀 The push has been completed! Repaired ${res.patches?.length} bugs, pushed branch '${res.git.branch}', and created Pull Request #${res.git.pr_number} on GitHub!`
+          });
+        } else if (isPushed) {
+          setAlert({
+            type: 'success',
+            message: `🚀 The push has been completed! Repaired ${res.patches?.length} bugs and pushed branch '${res.git.branch}' to GitHub (${ghRepo})!`
           });
         } else {
           setAlert({
             type: 'success',
-            message: 'All bugs repaired, validated with syntax check + pytest + AST re-scan, and committed to Git!'
+            message: 'All bugs repaired, validated with syntax check + pytest + AST re-scan, and committed locally to Git!'
           });
         }
       } else {
@@ -270,9 +297,12 @@ export const App: React.FC = () => {
           { step: 'Git Integration', status: 'PASSED', details: `Pushed clean project to ${res.git?.branch}.`, time: new Date().toLocaleTimeString() }
         ]);
         setGitInfo(res.git || null);
+        const isPushed = res.git?.push_status === 'pushed';
         setAlert({
           type: 'success',
-          message: 'Clean Project Verified! 0 bugs detected. Pushed successfully to Git.'
+          message: isPushed
+            ? `🚀 The push has been completed! Clean project verified and pushed to GitHub (${res.git?.branch})!`
+            : 'Clean Project Verified! 0 bugs detected. Committed locally to Git.'
         });
       } else {
         setFindings(res.findings || []);
@@ -456,6 +486,17 @@ export const App: React.FC = () => {
           </div>
         </div>
 
+        {/* ALWAYS-VISIBLE GITHUB CONNECTION & REPOSITORY CARD */}
+        <section>
+          <GitHubStatusCard
+            user={ghUser}
+            targetRepo={ghRepo}
+            gitInfo={gitInfo}
+            onOpenGitHubModal={() => setIsGhModalOpen(true)}
+            onDisconnect={handleDisconnectGitHub}
+          />
+        </section>
+
         {/* File Content Preview */}
         {selectedFileContent && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 text-xs font-mono shadow-sm">
@@ -489,17 +530,17 @@ export const App: React.FC = () => {
           </section>
         )}
 
+        {/* Git & GitHub Result Panel (PROMINENTLY PLACED IMMEDIATELY AFTER STEPPER) */}
+        {gitInfo && (
+          <section>
+            <GitStatusCard git={gitInfo} onOpenGitHubModal={() => setIsGhModalOpen(true)} />
+          </section>
+        )}
+
         {/* Code Diff Viewer (from Debug & Push) */}
         {patches.length > 0 && (
           <section>
             <CodeDiffViewer patches={patches} />
-          </section>
-        )}
-
-        {/* Git & GitHub Result Panel */}
-        {gitInfo && (
-          <section>
-            <GitStatusCard git={gitInfo} onOpenGitHubModal={() => setIsGhModalOpen(true)} />
           </section>
         )}
 
