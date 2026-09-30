@@ -118,7 +118,7 @@ export const ActionCards: React.FC<ActionCardsProps> = ({
           3. Verify & Push
         </h3>
         <p className="text-xs text-slate-500 mt-2 mb-6 leading-relaxed">
-          Verifies project has 0 vulnerabilities. If clean, runs unit tests and pushes codebase to Git. Blocks push if vulnerabilities are still open.
+          Verifies project has 0 bugs. If clean, runs unit tests and pushes codebase to Git. Blocks push if bugs are still open.
         </p>
 
         <button

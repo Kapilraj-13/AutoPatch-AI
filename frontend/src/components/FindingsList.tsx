@@ -7,7 +7,7 @@ interface FindingsListProps {
   onFixFinding?: (finding: Finding) => void;
 }
 
-export const FindingsList: React.FC<FindingsListProps> = ({ findings, title = "Security Vulnerability Findings" }) => {
+export const FindingsList: React.FC<FindingsListProps> = ({ findings, title = "Security Bug Findings" }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (!findings || findings.length === 0) {
@@ -16,9 +16,9 @@ export const FindingsList: React.FC<FindingsListProps> = ({ findings, title = "S
         <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 mx-auto flex items-center justify-center text-xl mb-3 font-bold">
           ✓
         </div>
-        <h4 className="text-base font-bold text-slate-900">No Security Vulnerabilities Detected</h4>
+        <h4 className="text-base font-bold text-slate-900">No Security Bugs Detected</h4>
         <p className="text-xs text-slate-500 mt-1">
-          AST security rules and static analyzers reported zero violations.
+          AST rules and static analyzers reported zero bug violations.
         </p>
       </div>
     );
@@ -99,7 +99,7 @@ export const FindingsList: React.FC<FindingsListProps> = ({ findings, title = "S
                   {/* Code Snippet */}
                   <div>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                      Vulnerable Code Snippet:
+                      Buggy Code Snippet:
                     </span>
                     <pre className="p-3 rounded-xl bg-slate-900 text-rose-300 font-mono overflow-x-auto border border-slate-800">
                       <code>{f.code_snippet}</code>

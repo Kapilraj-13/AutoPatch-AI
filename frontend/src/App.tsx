@@ -85,7 +85,7 @@ export const App: React.FC = () => {
 
       if (scanRes.findings.length > 0) {
         setTimeline([
-          { step: 'AST Security Scan', status: 'PASSED', details: `Found ${scanRes.findings.length} vulnerabilities across ${scanRes.stats.files_scanned} files.`, time: new Date().toLocaleTimeString() },
+          { step: 'AST Security Scan', status: 'PASSED', details: `Found ${scanRes.findings.length} bugs across ${scanRes.stats.files_scanned} files.`, time: new Date().toLocaleTimeString() },
           { step: 'Closed-Loop Repair & Push', status: 'RUNNING', details: 'Synthesizing patches, running pytest, and pushing to Git...', time: new Date().toLocaleTimeString() }
         ]);
 
@@ -99,12 +99,12 @@ export const App: React.FC = () => {
           if (debugRes.git?.pr_url) {
             setAlert({
               type: 'success',
-              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} vulnerabilities, validated via pytest, and created Pull Request #${debugRes.git.pr_number} on GitHub!`
+              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} bugs, validated via pytest, and created Pull Request #${debugRes.git.pr_number} on GitHub!`
             });
           } else {
             setAlert({
               type: 'success',
-              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} vulnerabilities, validated via pytest, and committed to Git!`
+              message: `🎉 Auto-Pipeline Completed: Detected and repaired ${debugRes.patches?.length} bugs, validated via pytest, and committed to Git!`
             });
           }
         } else {
@@ -116,14 +116,14 @@ export const App: React.FC = () => {
       } else {
         // Codebase clean, run verify & push
         setTimeline([
-          { step: 'AST Security Scan', status: 'PASSED', details: 'Zero vulnerabilities detected in codebase.', time: new Date().toLocaleTimeString() },
+          { step: 'AST Security Scan', status: 'PASSED', details: 'Zero bugs detected in codebase.', time: new Date().toLocaleTimeString() },
           { step: 'Git Integration', status: 'RUNNING', details: 'Pushing verified clean project to Git...', time: new Date().toLocaleTimeString() }
         ]);
         const verifyRes = await runVerifyAndPush(curTarget, ghToken, ghRepo);
         setGitInfo(verifyRes.git || null);
         setAlert({
           type: 'success',
-          message: 'Codebase verified clean! 0 vulnerabilities detected. Pushed to Git.'
+          message: 'Codebase verified clean! 0 bugs detected. Pushed to Git.'
         });
       }
       await refreshSystem();
@@ -231,12 +231,12 @@ export const App: React.FC = () => {
         if (res.git?.pr_url) {
           setAlert({
             type: 'success',
-            message: `🎉 All vulnerabilities repaired and Pull Request #${res.git.pr_number} created on GitHub!`
+            message: `🎉 All bugs repaired and Pull Request #${res.git.pr_number} created on GitHub!`
           });
         } else {
           setAlert({
             type: 'success',
-            message: 'All vulnerabilities repaired, validated with syntax check + pytest + AST re-scan, and committed to Git!'
+            message: 'All bugs repaired, validated with syntax check + pytest + AST re-scan, and committed to Git!'
           });
         }
       } else {
@@ -265,23 +265,23 @@ export const App: React.FC = () => {
       const res = await runVerifyAndPush(activeTarget || undefined, ghToken, ghRepo);
       if (res.clean) {
         setTimeline([
-          { step: 'AST Security Scan', status: 'PASSED', details: 'Zero vulnerabilities detected in codebase.', time: new Date().toLocaleTimeString() },
+          { step: 'AST Security Scan', status: 'PASSED', details: 'Zero bugs detected in codebase.', time: new Date().toLocaleTimeString() },
           { step: 'Syntax & Pytest Validation', status: 'PASSED', details: 'All automated tests passed.', time: new Date().toLocaleTimeString() },
           { step: 'Git Integration', status: 'PASSED', details: `Pushed clean project to ${res.git?.branch}.`, time: new Date().toLocaleTimeString() }
         ]);
         setGitInfo(res.git || null);
         setAlert({
           type: 'success',
-          message: 'Clean Project Verified! 0 vulnerabilities detected. Pushed successfully to Git.'
+          message: 'Clean Project Verified! 0 bugs detected. Pushed successfully to Git.'
         });
       } else {
         setFindings(res.findings || []);
         setTimeline([
-          { step: 'AST Security Scan', status: 'FAILED', details: `Found ${res.issues_count} unpatched vulnerabilities! Push rejected.`, time: new Date().toLocaleTimeString() }
+          { step: 'AST Security Scan', status: 'FAILED', details: `Found ${res.issues_count} unpatched bugs! Push rejected.`, time: new Date().toLocaleTimeString() }
         ]);
         setAlert({
           type: 'error',
-          message: `Cannot push: ${res.issues_count} unpatched vulnerabilities found! Please use 'Debug & Push' first.`
+          message: `Cannot push: ${res.issues_count} unpatched bugs found! Please use 'Debug & Push' first.`
         });
       }
       await refreshSystem();
